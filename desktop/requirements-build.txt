@@ -1,0 +1,11 @@
+# Нужно ТОЛЬКО на машине, где собирается exe. Внутрь exe не попадает.
+transformers>=4.40.0
+optimum[exporters]>=1.20.0
+onnx>=1.16.0
+
+# Попадает внутрь exe
+onnxruntime>=1.18.0
+tokenizers>=0.19.0
+numpy>=1.26.0
+
+pyinstaller>=6.6.0

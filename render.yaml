@@ -1,0 +1,39 @@
+# Конфигурация Render.com для деплоя на Free Tier.
+# https://render.com/docs/blueprint-spec
+# Создайте Web Service на Render, импортировав этот файл, или
+# настройте сервис вручную, используя параметры ниже.
+
+services:
+  - type: web
+    name: sii-lr01-rag
+    runtime: python
+    plan: free
+    # Render Free Tier: 0.1 CPU, 512 МБ RAM
+    # Главное — НЕ тянуть torch / chromadb в runtime. Все тяжёлые компоненты
+    # уже сконвертированы в ONNX и лежат в desktop/bundle/ внутри репозитория.
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1 --no-access-log
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: RAG_BACKEND
+        value: light
+      - key: RAG_MODEL
+        value: cointegrated/rubert-tiny2
+      - key: RAG_SCORE_THRESHOLD
+        value: "0.35"
+      - key: RAG_TOP_K
+        value: "3"
+      - key: RAG_LOG_LEVEL
+        value: INFO
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: HF_HUB_OFFLINE
+        value: "1"
+      - key: TRANSFORMERS_OFFLINE
+        value: "1"
+      # ONNX Runtime: ограничиваем потоки, чтобы не "задушить" 0.1 CPU
+      - key: OMP_NUM_THREADS
+        value: "1"
+      - key: ORT_NUM_THREADS
+        value: "1"

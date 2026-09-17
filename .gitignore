@@ -1,0 +1,38 @@
+# Виртуальное окружение
+venv/
+.venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Векторный индекс
+.chroma/
+
+# Кеш моделей HuggingFace (если настроен локально)
+.cache/
+models/
+
+# Среда и IDE
+.env
+.idea/
+.vscode/
+.DS_Store
+
+# Большие исходники корпуса (текущий корпус мал и хранится в репозитории)
+# data/raw/
+
+# Сборка desktop-демо
+.venv-build/
+build/
+dist/
+*.spec.bak
+
+# ВАЖНО: desktop/bundle/ ВКЛЮЧЁН в репозиторий!
+# Этот bundle содержит ONNX-модель (119 МБ) и предсобранный индекс (45 КБ),
+# необходимые для запуска на Render Free Tier (без PyTorch/ChromaDB).
+# Не удаляйте и не добавляйте в .gitignore.
+# desktop/bundle/

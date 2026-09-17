@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RAG-ассистент по документам</title>
+<style>
+  :root {
+    --bg: #0f1216;
+    --panel: #171b21;
+    --panel-2: #1f242c;
+    --line: #2b323c;
+    --text: #e6e9ee;
+    --muted: #9aa4b2;
+    --accent: #5b9dff;
+    --ok: #3ecf8e;
+    --warn: #f0b429;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 20px 64px; }
+  header { border-bottom: 1px solid var(--line); padding-bottom: 18px; margin-bottom: 24px; }
+  h1 { font-size: 22px; margin: 0 0 6px; font-weight: 650; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .pill {
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--muted);
+    border-radius: 999px; padding: 4px 11px; font-size: 12px;
+  }
+  .pill b { color: var(--text); font-weight: 600; }
+  .askbox { display: flex; gap: 10px; margin-bottom: 14px; }
+  input[type=text] {
+    flex: 1; background: var(--panel); border: 1px solid var(--line); color: var(--text);
+    border-radius: 10px; padding: 13px 15px; font-size: 15px; outline: none;
+  }
+  input[type=text]:focus { border-color: var(--accent); }
+  button {
+    background: var(--accent); color: #0b1220; border: 0; border-radius: 10px;
+    padding: 0 22px; font-size: 15px; font-weight: 600; cursor: pointer;
+  }
+  button:disabled { opacity: .55; cursor: default; }
+  .examples { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 26px; }
+  .chip {
+    background: transparent; border: 1px solid var(--line); color: var(--muted);
+    border-radius: 8px; padding: 6px 11px; font-size: 13px; cursor: pointer;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--text); }
+  .chip.neg { border-style: dashed; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 20px 22px; margin-bottom: 16px;
+  }
+  .label { font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .answer { font-size: 16px; }
+  .answer.empty { color: var(--warn); }
+  .src { border-top: 1px solid var(--line); padding: 11px 0; display: flex; gap: 14px; align-items: baseline; }
+  .src:first-of-type { border-top: 0; }
+  .file { font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+  .score { color: var(--ok); font-family: ui-monospace, Consolas, monospace; font-size: 13px; min-width: 64px; }
+  .cid { color: var(--muted); font-size: 12px; }
+  pre {
+    background: #0b0e12; border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px; overflow-x: auto; font-size: 12.5px; color: #cbd5e1; margin: 0;
+  }
+  .foot { color: var(--muted); font-size: 12px; margin-top: 10px; }
+  .toggle { background: none; color: var(--muted); border: 0; padding: 0; font-size: 13px; text-decoration: underline; cursor: pointer; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>RAG-ассистент по документам</h1>
+    <div class="sub">ЛР1 · Системы искусственного интеллекта · ответ строится только из найденных фрагментов</div>
+    <div class="meta">
+      <span class="pill">модель: <b>{{MODEL}}</b></span>
+      <span class="pill">документов: <b>{{FILES}}</b></span>
+      <span class="pill">чанков: <b>{{CHUNKS}}</b></span>
+      <span class="pill">порог: <b>{{THRESHOLD}}</b></span>
+      <span class="pill">режим: <b>офлайн</b></span>
+    </div>
+  </header>
+
+  <div class="askbox">
+    <input type="text" id="q" placeholder="Задайте вопрос по документам компании..." autocomplete="off">
+    <button id="go">Спросить</button>
+  </div>
+
+  <div class="examples" id="examples"></div>
+
+  <div id="result" class="hidden">
+    <div class="card">
+      <div class="label">Ответ</div>
+      <div class="answer" id="answer"></div>
+      <div class="foot" id="timing"></div>
+    </div>
+    <div class="card" id="sourcesCard">
+      <div class="label">Источники</div>
+      <div id="sources"></div>
+    </div>
+    <button class="toggle" id="jsonToggle">Показать ответ API (JSON)</button>
+    <pre id="raw" class="hidden" style="margin-top:12px"></pre>
+  </div>
+
+  <div class="foot">Корпус: {{FILELIST}}</div>
+</div>
+
+<script>
+const EXAMPLES = [
+  ["За сколько дней нужно подать заявление на отпуск?", false],
+  ["Какой лимит на проживание в гостинице в Москве?", false],
+  ["Как сбросить пароль от учётной записи?", false],
+  ["Как оплачивается переработка?", false],
+  ["Какая компенсация за спортзал?", false],
+  ["Как приготовить борщ из марсианской свёклы?", true]
+];
+
+const qEl = document.getElementById('q');
+const goEl = document.getElementById('go');
+const resEl = document.getElementById('result');
+const ansEl = document.getElementById('answer');
+const srcEl = document.getElementById('sources');
+const srcCard = document.getElementById('sourcesCard');
+const rawEl = document.getElementById('raw');
+const timeEl = document.getElementById('timing');
+
+const box = document.getElementById('examples');
+EXAMPLES.forEach(([text, negative]) => {
+  const b = document.createElement('button');
+  b.className = 'chip' + (negative ? ' neg' : '');
+  b.textContent = negative ? text + '  (нет в документах)' : text;
+  b.onclick = () => { qEl.value = text; ask(); };
+  box.appendChild(b);
+});
+
+async function ask() {
+  const question = qEl.value.trim();
+  if (!question) return;
+  goEl.disabled = true;
+  ansEl.textContent = 'Ищу в документах...';
+  ansEl.className = 'answer';
+  srcEl.innerHTML = '';
+  timeEl.textContent = '';
+  resEl.classList.remove('hidden');
+  try {
+    const r = await fetch('/ask', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({question})
+    });
+    const data = await r.json();
+    render(data);
+  } catch (e) {
+    ansEl.textContent = 'Ошибка запроса: ' + e;
+  } finally {
+    goEl.disabled = false;
+  }
+}
+
+function render(data) {
+  const empty = !data.sources || data.sources.length === 0;
+  ansEl.textContent = data.answer || data.detail || '—';
+  ansEl.className = 'answer' + (empty ? ' empty' : '');
+  srcCard.style.display = empty ? 'none' : '';
+  srcEl.innerHTML = '';
+  (data.sources || []).forEach(s => {
+    const row = document.createElement('div');
+    row.className = 'src';
+    row.innerHTML = `<span class="score">${s.score.toFixed(4)}</span>
+      <span class="file">${s.file}</span>
+      <span class="cid">фрагмент #${s.chunk_id}</span>`;
+    srcEl.appendChild(row);
+  });
+  timeEl.textContent = `модель: ${data.model_version || '—'}`
+    + (data.latency_ms ? ` · ${data.latency_ms} мс` : '');
+  rawEl.textContent = JSON.stringify(data, null, 2);
+}
+
+document.getElementById('jsonToggle').onclick = (e) => {
+  rawEl.classList.toggle('hidden');
+  e.target.textContent = rawEl.classList.contains('hidden')
+    ? 'Показать ответ API (JSON)' : 'Скрыть ответ API (JSON)';
+};
+goEl.onclick = ask;
+qEl.addEventListener('keydown', e => { if (e.key === 'Enter') ask(); });
+qEl.focus();
+</script>
+</body>
+</html>
